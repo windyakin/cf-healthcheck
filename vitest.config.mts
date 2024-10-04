@@ -6,6 +6,9 @@ export default defineWorkersConfig({
 			workers: {
 				wrangler: { configPath: './wrangler.toml' },
 			},
+      miniflare: {
+        kvNamespaces: {'STATUS_KV': 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'},
+      }
 		},
 	},
 });
