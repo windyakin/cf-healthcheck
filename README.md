@@ -1,6 +1,8 @@
 # cf-healthcheck
 
-Synthetic minitoring (HTTP health check) from Cloudflare Worker.
+Synthetic monitoring (HTTP health check) from Cloudflare Worker, with notifications sent to Slack upon status changes.
+
+![](screenshot.png)
 
 ## License
 
