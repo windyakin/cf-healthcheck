@@ -79,8 +79,8 @@ export default {
       }
 
       let nextScheduledTime = null;
-      const resetHoursInUTC = env.RESET_HOURS_IN_UTC;
-      if (resetHoursInUTC) {
+      const resetHoursInUTC = parseInt(`${env.RESET_HOURS_IN_UTC}`);
+      if (!Number.isNaN(resetHoursInUTC) && (0 <= resetHoursInUTC && resetHoursInUTC <= 23)) {
         nextScheduledTime = new Date();
         nextScheduledTime.setUTCHours(resetHoursInUTC, 0, 0, 0);
       }
