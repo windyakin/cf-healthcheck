@@ -83,6 +83,7 @@ export default {
       if (!Number.isNaN(resetHoursInUTC) && (0 <= resetHoursInUTC && resetHoursInUTC <= 23)) {
         nextScheduledTime = new Date();
         nextScheduledTime.setUTCHours(resetHoursInUTC, 0, 0, 0);
+        nextScheduledTime.setDate(nextScheduledTime.getDate() + 1);
       }
       await env.STATUS_KV.put(kvKey, currentStatus, (nextScheduledTime ? { expiration: nextScheduledTime.getTime() / 1000 } : undefined));
     }
