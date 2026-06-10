@@ -67,19 +67,25 @@ describe('fetchWithRetry', () => {
     expect(getCalls()).toBe(3); // initial attempt + 2 retries
   });
 
-  it('throws Timeout after exhausting all retries', async () => {
+  it('throws Timeout after exhausting all retries and reports attempt count', async () => {
     const { fetcher, getCalls } = makeTimeoutFetcher(99, new Response('ok'));
-    await expect(fetchWithRetry('https://example.com', 10, 1, fetcher)).rejects.toThrow(TIMEOUT_ERROR);
-    expect(getCalls()).toBe(2); // initial attempt + 1 retry
+    await expect(fetchWithRetry('https://example.com', 10, 1, fetcher)).rejects.toMatchObject({
+      message: TIMEOUT_ERROR,
+      attempts: 2, // initial attempt + 1 retry
+    });
+    expect(getCalls()).toBe(2);
   });
 
-  it('does not retry on non-timeout errors', async () => {
+  it('does not retry on non-timeout errors and reports a single attempt', async () => {
     let calls = 0;
     const fetcher = (() => {
       calls++;
       return Promise.reject(new Error('Network down'));
     }) as unknown as typeof fetch;
-    await expect(fetchWithRetry('https://example.com', 10, 3, fetcher)).rejects.toThrow('Network down');
+    await expect(fetchWithRetry('https://example.com', 10, 3, fetcher)).rejects.toMatchObject({
+      message: 'Network down',
+      attempts: 1,
+    });
     expect(calls).toBe(1);
   });
 });

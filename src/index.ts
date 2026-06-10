@@ -43,6 +43,8 @@ export const fetchWithRetry = async function(
       return await fetchWithTimeout(url, timeoutMs, fetcher);
     } catch (error: any) {
       lastError = error;
+      // Record how many connection attempts were made so callers can report it.
+      error.attempts = attempt + 1;
       if (error?.message !== TIMEOUT_ERROR) {
         throw error;
       }
@@ -85,6 +87,9 @@ export default {
       console.error(error);
       currentStatus = Health.FAILED;
       resultMessage = `${error.message}`;
+      if (error.attempts > 1) {
+        resultMessage += ` (${error.attempts} attempts)`;
+      }
     }
 
     const slackWebhookUrl = env.SLACK_WEBHOOK_URL;
