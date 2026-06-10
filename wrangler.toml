@@ -25,6 +25,7 @@ enabled = true
 [vars]
 TARGET_URL = "https://httpbin.org/status/200"
 TIMEOUT_MS = 3000
+RETRY_COUNT = 2
 RESET_HOURS_IN_UTC = 0
 
 # Bind the Workers AI model catalog. Run machine learning models, powered by serverless GPUs, on Cloudflare’s global network

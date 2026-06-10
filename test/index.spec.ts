@@ -2,7 +2,7 @@
 import { env, createExecutionContext, waitOnExecutionContext, SELF } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import worker from '../src/index';
-import { getColor, getEmoji, Health } from '../src/index';
+import { getColor, getEmoji, Health, fetchWithRetry, TIMEOUT_ERROR } from '../src/index';
 
 // For now, you'll need to do something like this to get a correctly-typed
 // `Request` to pass to `worker.fetch()`.
@@ -41,6 +41,52 @@ describe('fetch', () => {
     await env.STATUS_KV.put('endpoint-status--httpbin-org', null);
     const response = await SELF.fetch('https://example.com');
     expect(await response.text()).toMatchInlineSnapshot(`"httpbin.org is null"`);
+  });
+});
+
+describe('fetchWithRetry', () => {
+  // A fetcher that never resolves for the first `failTimes` calls (forcing a
+  // timeout), then resolves with `response`.
+  const makeTimeoutFetcher = (failTimes: number, response: Response) => {
+    let calls = 0;
+    const fetcher = ((_url: string) => {
+      calls++;
+      if (calls <= failTimes) {
+        return new Promise<Response>(() => {}); // never settles -> times out
+      }
+      return Promise.resolve(response);
+    }) as unknown as typeof fetch;
+    return { fetcher, getCalls: () => calls };
+  };
+
+  it('retries on timeout and succeeds within the retry budget', async () => {
+    const ok = new Response('ok', { status: 200 });
+    const { fetcher, getCalls } = makeTimeoutFetcher(2, ok);
+    const response = await fetchWithRetry('https://example.com', 10, 2, fetcher);
+    expect(response.status).toBe(200);
+    expect(getCalls()).toBe(3); // initial attempt + 2 retries
+  });
+
+  it('throws Timeout after exhausting all retries and reports attempt count', async () => {
+    const { fetcher, getCalls } = makeTimeoutFetcher(99, new Response('ok'));
+    await expect(fetchWithRetry('https://example.com', 10, 1, fetcher)).rejects.toMatchObject({
+      message: TIMEOUT_ERROR,
+      attempts: 2, // initial attempt + 1 retry
+    });
+    expect(getCalls()).toBe(2);
+  });
+
+  it('does not retry on non-timeout errors and reports a single attempt', async () => {
+    let calls = 0;
+    const fetcher = (() => {
+      calls++;
+      return Promise.reject(new Error('Network down'));
+    }) as unknown as typeof fetch;
+    await expect(fetchWithRetry('https://example.com', 10, 3, fetcher)).rejects.toMatchObject({
+      message: 'Network down',
+      attempts: 1,
+    });
+    expect(calls).toBe(1);
   });
 });
 

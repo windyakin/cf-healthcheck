@@ -6,6 +6,54 @@ export const Health = {
 
 export type Health = (typeof Health)[keyof typeof Health] | null;
 
+export const TIMEOUT_ERROR = 'Timeout';
+
+// Fetch a URL, rejecting with a Timeout error if it does not respond in time.
+export const fetchWithTimeout = async function(
+  url: string,
+  timeoutMs: number,
+  fetcher: typeof fetch = fetch,
+): Promise<Response> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      fetcher(url),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(TIMEOUT_ERROR)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+// Fetch a URL, retrying up to `maxRetries` extra times when it times out.
+// Non-timeout errors are thrown immediately without retrying.
+export const fetchWithRetry = async function(
+  url: string,
+  timeoutMs: number,
+  maxRetries: number,
+  fetcher: typeof fetch = fetch,
+): Promise<Response> {
+  let lastError: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fetchWithTimeout(url, timeoutMs, fetcher);
+    } catch (error: any) {
+      lastError = error;
+      // Record how many connection attempts were made so callers can report it.
+      error.attempts = attempt + 1;
+      if (error?.message !== TIMEOUT_ERROR) {
+        throw error;
+      }
+      console.warn(`Timeout fetching ${url} (attempt ${attempt + 1}/${maxRetries + 1})`);
+    }
+  }
+  throw lastError;
+}
+
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const targetUrl = env.TARGET_URL;
@@ -28,22 +76,20 @@ export default {
 
     let resultMessage: string;
 
+    const timeoutMs = env.TIMEOUT_MS || 5000;
+    const maxRetries = Math.max(0, parseInt(`${env.RETRY_COUNT}`) || 0);
+
     try {
-      const response = await Promise.race([
-        fetch(targetUrl),
-        // fetch timeout
-        new Promise((resolve, reject) => setTimeout(() => reject(new Error('Timeout')), env.TIMEOUT_MS || 5000)),
-      ]);
-      if (response instanceof Response) {
-        currentStatus = response.ok ? Health.OK : Health.ERROR;
-        resultMessage = `${response.status} (${response.statusText})`;
-      } else {
-        throw new Error('ERROR to fetch');
-      }
+      const response = await fetchWithRetry(targetUrl, timeoutMs, maxRetries);
+      currentStatus = response.ok ? Health.OK : Health.ERROR;
+      resultMessage = `${response.status} (${response.statusText})`;
     } catch (error: any) {
       console.error(error);
       currentStatus = Health.FAILED;
       resultMessage = `${error.message}`;
+      if (error.attempts > 1) {
+        resultMessage += ` (${error.attempts} attempts)`;
+      }
     }
 
     const slackWebhookUrl = env.SLACK_WEBHOOK_URL;

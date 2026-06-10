@@ -5,5 +5,6 @@ interface Env {
   STATUS_KV: KVNamespace;
   SLACK_WEBHOOK_URL?: string;
   TIMEOUT_MS?: number;
+  RETRY_COUNT?: number;
   RESET_HOURS_IN_UTC?: number;
 }
